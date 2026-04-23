@@ -26,7 +26,7 @@ import CoreLocation
  [结束]
 
  异常分支：
- - 权限拒绝 -> failed（可按配置跳系统设置）
+ - 权限拒绝 -> finish（通过 onStopped / onStoppedError 回传）
  - 任意 Step 抛错 -> failed
  - 外部 cancel -> cancelled
  */
@@ -40,9 +40,10 @@ enum FlowPipelineDemoFactory {
 
     /// 默认流程：相机权限 -> 拍照 -> 定位权限 -> 定位 -> 上传
     static func defaultSteps(
-        cameraMode: CameraMode = .system,
         onCameraPermissionStopped: ((PermissionStopContext) -> Void)? = nil,
         onLocationPermissionStopped: ((PermissionStopContext) -> Void)? = nil,
+        onCameraPermissionError: ((FlowError.Permission) -> Void)? = nil,
+        onLocationPermissionError: ((FlowError.Permission) -> Void)? = nil,
         autoOpenSettingsWhenPermissionStopped: Bool = false,
         onUploaded: ((FlowUploadResponse) -> Void)? = nil
     ) -> [AnyFlowStep] {
@@ -57,19 +58,20 @@ enum FlowPipelineDemoFactory {
             AnyFlowStep(
                 AuthorizeCameraStep(
                     onStopped: onCameraPermissionStopped,
+                    onStoppedError: onCameraPermissionError,
                     autoOpenSettingsWhenStopped: autoOpenSettingsWhenPermissionStopped
                 )
             ),
             AnyFlowStep(
                 CaptureImageStep(
                     cameraService: cameraService,
-                    mode: cameraMode,
                     onCaptured: { imageHolder.value = $0 }
                 )
             ),
             AnyFlowStep(
                 AuthorizeLocationStep(
                     onStopped: onLocationPermissionStopped,
+                    onStoppedError: onLocationPermissionError,
                     autoOpenSettingsWhenStopped: autoOpenSettingsWhenPermissionStopped
                 )
             ),
@@ -93,6 +95,7 @@ enum FlowPipelineDemoFactory {
     /// 示例：已知只需要定位，不需要图片。
     static func locationOnlySteps(
         onLocationPermissionStopped: ((PermissionStopContext) -> Void)? = nil,
+        onLocationPermissionError: ((FlowError.Permission) -> Void)? = nil,
         autoOpenSettingsWhenPermissionStopped: Bool = false,
         onUploaded: ((FlowUploadResponse) -> Void)? = nil
     ) -> [AnyFlowStep] {
@@ -105,6 +108,7 @@ enum FlowPipelineDemoFactory {
             AnyFlowStep(
                 AuthorizeLocationStep(
                     onStopped: onLocationPermissionStopped,
+                    onStoppedError: onLocationPermissionError,
                     autoOpenSettingsWhenStopped: autoOpenSettingsWhenPermissionStopped
                 )
             ),
@@ -126,11 +130,20 @@ enum FlowPipelineDemoFactory {
 
     /// 示例：只做通知权限申请（不获取图片/定位）
     static func notificationOnlySteps(
+        onNotificationPermissionStopped: ((PermissionStopContext) -> Void)? = nil,
+        onNotificationPermissionError: ((FlowError.Permission) -> Void)? = nil,
+        autoOpenSettingsWhenPermissionStopped: Bool = false,
         onUploaded: ((FlowUploadResponse) -> Void)? = nil
     ) -> [AnyFlowStep] {
         let networkService = DemoFlowNetworkService()
         return [
-            AnyFlowStep(AuthorizeNotificationStep()),
+            AnyFlowStep(
+                AuthorizeNotificationStep(
+                    onStopped: onNotificationPermissionStopped,
+                    onStoppedError: onNotificationPermissionError,
+                    autoOpenSettingsWhenStopped: autoOpenSettingsWhenPermissionStopped
+                )
+            ),
             AnyFlowStep(UploadStep(networkService: networkService, onUploaded: onUploaded))
         ]
     }
@@ -168,7 +181,6 @@ private final class LocationHolder {
      print("flow done")
  }
  let steps = FlowPipelineDemoFactory.defaultSteps(
-     cameraMode: .custom,
      onCameraPermissionStopped: { info in
          print("camera stopped:", info.reason, info.message, info.canOpenSettings)
      },

@@ -5,14 +5,22 @@ import UIKit
 /// 通知权限步骤（单文件单职责，自己处理授权逻辑）
 struct AuthorizeNotificationStep: FlowStep {
     let id: String
-    let openSettingsIfDenied: Bool
+    let onStopped: ((PermissionStopContext) -> Void)?
+    let onStoppedError: ((FlowError.Permission) -> Void)?
+    let autoOpenSettingsWhenStopped: Bool
+
+    var provides: Set<FlowCapability> { [.notificationAuthorized] }
 
     init(
         id: String = "permission.notification",
-        openSettingsIfDenied: Bool = false
+        onStopped: ((PermissionStopContext) -> Void)? = nil,
+        onStoppedError: ((FlowError.Permission) -> Void)? = nil,
+        autoOpenSettingsWhenStopped: Bool = false
     ) {
         self.id = id
-        self.openSettingsIfDenied = openSettingsIfDenied
+        self.onStopped = onStopped
+        self.onStoppedError = onStoppedError
+        self.autoOpenSettingsWhenStopped = autoOpenSettingsWhenStopped
     }
 
     func run(
@@ -29,25 +37,53 @@ struct AuthorizeNotificationStep: FlowStep {
                 let granted = try await UNUserNotificationCenter.current()
                     .requestAuthorization(options: [.alert, .badge, .sound])
                 guard granted else {
-                    if openSettingsIfDenied { openSystemSettings() }
-                    throw FlowError.authorizationDenied(message: "通知权限被拒绝")
+                    return stop(
+                        .init(
+                            feature: .notification,
+                            reason: .permissionDenied,
+                            message: "通知权限被拒绝",
+                            canOpenSettings: true
+                        )
+                    )
                 }
                 return .next
             } catch {
-                if openSettingsIfDenied { openSystemSettings() }
-                throw FlowError.authorizationRequestFailed(message: "通知权限申请失败")
+                return stop(
+                    .init(
+                        feature: .notification,
+                        reason: .unavailable,
+                        message: "通知权限申请失败",
+                        canOpenSettings: false
+                    )
+                )
             }
         case .denied:
-            if openSettingsIfDenied { openSystemSettings() }
-            throw FlowError.authorizationDenied(message: "通知权限被拒绝")
+            return stop(
+                .init(
+                    feature: .notification,
+                    reason: .permissionDenied,
+                    message: "通知权限被拒绝",
+                    canOpenSettings: true
+                )
+            )
         @unknown default:
-            if openSettingsIfDenied { openSystemSettings() }
-            throw FlowError.authorizationRequestFailed(message: "通知权限状态异常")
+            return stop(
+                .init(
+                    feature: .notification,
+                    reason: .unavailable,
+                    message: "通知权限状态异常",
+                    canOpenSettings: false
+                )
+            )
         }
     }
 
-    private func openSystemSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
+    private func stop(_ context: PermissionStopContext) -> FlowDirective {
+        onStopped?(context)
+        onStoppedError?(context.asFlowPermissionError)
+        if autoOpenSettingsWhenStopped, context.canOpenSettings {
+            AppSettingsNavigator.open()
+        }
+        return .finish
     }
 }

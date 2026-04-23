@@ -6,15 +6,20 @@ import UIKit
 struct AuthorizeCameraStep: FlowStep {
     let id: String
     let onStopped: ((PermissionStopContext) -> Void)?
+    let onStoppedError: ((FlowError.Permission) -> Void)?
     let autoOpenSettingsWhenStopped: Bool
+
+    var provides: Set<FlowCapability> { [.cameraAuthorized] }
 
     init(
         id: String = "permission.camera",
         onStopped: ((PermissionStopContext) -> Void)? = nil,
+        onStoppedError: ((FlowError.Permission) -> Void)? = nil,
         autoOpenSettingsWhenStopped: Bool = false
     ) {
         self.id = id
         self.onStopped = onStopped
+        self.onStoppedError = onStoppedError
         self.autoOpenSettingsWhenStopped = autoOpenSettingsWhenStopped
     }
 
@@ -85,6 +90,7 @@ struct AuthorizeCameraStep: FlowStep {
 
     private func stop(_ context: PermissionStopContext) -> FlowDirective {
         onStopped?(context)
+        onStoppedError?(context.asFlowPermissionError)
         if autoOpenSettingsWhenStopped, context.canOpenSettings {
             AppSettingsNavigator.open()
         }

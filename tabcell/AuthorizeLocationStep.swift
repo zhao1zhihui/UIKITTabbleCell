@@ -6,15 +6,20 @@ import UIKit
 struct AuthorizeLocationStep: FlowStep {
     let id: String
     let onStopped: ((PermissionStopContext) -> Void)?
+    let onStoppedError: ((FlowError.Permission) -> Void)?
     let autoOpenSettingsWhenStopped: Bool
+
+    var provides: Set<FlowCapability> { [.locationAuthorized] }
 
     init(
         id: String = "permission.location",
         onStopped: ((PermissionStopContext) -> Void)? = nil,
+        onStoppedError: ((FlowError.Permission) -> Void)? = nil,
         autoOpenSettingsWhenStopped: Bool = false
     ) {
         self.id = id
         self.onStopped = onStopped
+        self.onStoppedError = onStoppedError
         self.autoOpenSettingsWhenStopped = autoOpenSettingsWhenStopped
     }
 
@@ -74,6 +79,7 @@ struct AuthorizeLocationStep: FlowStep {
 
     private func stop(_ context: PermissionStopContext) -> FlowDirective {
         onStopped?(context)
+        onStoppedError?(context.asFlowPermissionError)
         if autoOpenSettingsWhenStopped, context.canOpenSettings {
             AppSettingsNavigator.open()
         }

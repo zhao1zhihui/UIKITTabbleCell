@@ -4,11 +4,6 @@ import CoreLocation
 
 // MARK: - 基础类型
 
-enum CameraMode {
-    case system
-    case custom
-}
-
 struct FlowUploadResponse {
     let requestID: String
     let message: String
@@ -18,6 +13,7 @@ struct FlowUploadResponse {
 enum PermissionFeature {
     case camera
     case location
+    case notification
 }
 
 /// 权限节点中止原因（中止是“受控结束”，不一定是异常）
@@ -34,12 +30,26 @@ struct PermissionStopContext {
     let reason: PermissionStopReason
     let message: String
     let canOpenSettings: Bool
+
+    /// 将“权限中止上下文”映射为统一错误模型，便于埋点/弹窗策略统一处理。
+    var asFlowPermissionError: FlowError.Permission {
+        switch reason {
+        case .servicesDisabled:
+            return .servicesDisabled(feature: feature, message: message)
+        case .permissionDenied:
+            return .denied(feature: feature, message: message)
+        case .restricted:
+            return .restricted(feature: feature, message: message)
+        case .unavailable:
+            return .unavailable(feature: feature, message: message)
+        }
+    }
 }
 
 // MARK: - 协议定义（方便测试和替换实现）
 
 protocol CameraService {
-    func openCamera(mode: CameraMode) async throws -> UIImage
+    func openCamera() async throws -> UIImage
 }
 
 protocol LocationService {
@@ -61,33 +71,22 @@ enum AppSettingsNavigator {
 // MARK: - 相机服务（示例实现）
 
 /// 示例相机服务：
-/// - 保留 system/custom 两种模式接口
-/// - 这里用本地生成图片模拟，项目里可替换为真实相机实现
+/// - 这里只实现系统相机能力接口
+/// - 示例里用本地生成图片模拟，项目里可替换为真实相机实现
 final class DemoCameraService: CameraService {
-    func openCamera(mode: CameraMode) async throws -> UIImage {
+    func openCamera() async throws -> UIImage {
         try? await Task.sleep(nanoseconds: 150_000_000)
-
-        let title: String
-        let color: UIColor
-        switch mode {
-        case .system:
-            title = "System Camera"
-            color = .systemBlue
-        case .custom:
-            title = "Custom Camera"
-            color = .systemOrange
-        }
 
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 600))
         return renderer.image { context in
-            color.setFill()
+            UIColor.systemBlue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 800, height: 600))
 
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: 36, weight: .bold),
                 .foregroundColor: UIColor.white
             ]
-            let text = NSString(string: title)
+            let text = NSString(string: "System Camera")
             text.draw(at: CGPoint(x: 40, y: 260), withAttributes: attrs)
         }
     }

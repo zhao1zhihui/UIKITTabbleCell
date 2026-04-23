@@ -8,18 +8,18 @@ import CoreLocation
 struct CaptureImageStep: FlowStep {
     let id: String
     let cameraService: CameraService
-    let mode: CameraMode
     let onCaptured: (UIImage) -> Void
+
+    var requires: Set<FlowCapability> { [.cameraAuthorized] }
+    var provides: Set<FlowCapability> { [.custom("cameraImageCaptured")] }
 
     init(
         id: String = "camera.capture",
         cameraService: CameraService,
-        mode: CameraMode = .system,
         onCaptured: @escaping (UIImage) -> Void
     ) {
         self.id = id
         self.cameraService = cameraService
-        self.mode = mode
         self.onCaptured = onCaptured
     }
 
@@ -28,11 +28,11 @@ struct CaptureImageStep: FlowStep {
     ) async throws -> FlowDirective {
         _ = emitState
         do {
-            let image = try await cameraService.openCamera(mode: mode)
+            let image = try await cameraService.openCamera()
             onCaptured(image)
             return .next
         } catch {
-            throw FlowError.cameraCaptureFailed(message: "获取图片失败：\(error.localizedDescription)")
+            throw FlowError.camera(.captureFailed(message: "获取图片失败：\(error.localizedDescription)"))
         }
     }
 }
@@ -42,6 +42,9 @@ struct FetchLocationStep: FlowStep {
     let id: String
     let locationService: LocationService
     let onFetched: (CLLocation) -> Void
+
+    var requires: Set<FlowCapability> { [.locationAuthorized] }
+    var provides: Set<FlowCapability> { [.custom("locationFetched")] }
 
     init(
         id: String = "location.fetch",
@@ -62,7 +65,7 @@ struct FetchLocationStep: FlowStep {
             onFetched(location)
             return .next
         } catch {
-            throw FlowError.locationFailed(message: "获取定位失败：\(error.localizedDescription)")
+            throw FlowError.location(.fetchFailed(message: "获取定位失败：\(error.localizedDescription)"))
         }
     }
 }
@@ -103,7 +106,7 @@ struct UploadStep: FlowStep {
             onUploaded?(response)
             return .next
         } catch {
-            throw FlowError.networkFailed(message: "网络请求失败：\(error.localizedDescription)")
+            throw FlowError.network(.requestFailed(message: "网络请求失败：\(error.localizedDescription)"))
         }
     }
 }
