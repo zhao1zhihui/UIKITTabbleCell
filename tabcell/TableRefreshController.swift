@@ -32,12 +32,11 @@ final class TableRefreshController: TableRefreshControlling {
         tableView?.bindGlobalStyle(forFootRefreshHandler: { [weak self] in
             self?.triggerLoadMore()
         })
-        tableView?.footRefreshControl?.autoRefreshOnFoot = true
+        //tableView?.footRefreshControl?.autoRefreshOnFoot = true
     }
 
     private func triggerRefresh() {
         guard !isRefreshing, !isLoadingMore else {
-            tableView?.headRefreshControl?.endRefreshing()
             return
         }
         isRefreshing = true
@@ -45,22 +44,15 @@ final class TableRefreshController: TableRefreshControlling {
         refreshTask = Task { [weak self] in
             guard let self else { return }
             await self.onRefresh()
-            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.isRefreshing = false
                 self.tableView?.headRefreshControl?.endRefreshing()
-                self.tableView?.footRefreshControl?.endRefreshing()
             }
         }
     }
 
     private func triggerLoadMore() {
         guard !isLoadingMore, !isRefreshing else {
-            tableView?.footRefreshControl?.endRefreshing()
-            return
-        }
-        guard hasMore() else {
-            tableView?.footRefreshControl?.endRefreshing()
             return
         }
         isLoadingMore = true
@@ -68,10 +60,14 @@ final class TableRefreshController: TableRefreshControlling {
         loadMoreTask = Task { [weak self] in
             guard let self else { return }
             await self.onLoadMore()
-            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.isLoadingMore = false
-                self.tableView?.footRefreshControl?.endRefreshing()
+                
+                if !self.hasMore() {
+                    self.tableView?.footRefreshControl.endRefreshingAndNoLongerRefreshing(withAlertText: "no more")
+                } else {
+                    self.tableView?.footRefreshControl?.endRefreshing()
+                }
             }
         }
     }
